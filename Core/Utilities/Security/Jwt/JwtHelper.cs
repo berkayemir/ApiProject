@@ -1,4 +1,5 @@
 ﻿using Core.Entities.Concrete;
+using Core.Extensions;
 using Core.Utilities.Security.Encyption;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -29,6 +30,15 @@ namespace Core.Utilities.Security.Jwt
         {
             var securityKey = SecurityKeHelper.CreateSecurityKey(_tokenOptions.SecurityKey);
             var signingCredentials = SigningCredentialsHelper.CreateSigningCredentials(securityKey);
+            var jwt = CreateJwtSecurityToken(_tokenOptions,user,signingCredentials,operationClaims);
+            var jwtSecurityTokenhandler = new JwtSecurityTokenHandler();
+            var token = jwtSecurityTokenhandler.WriteToken(jwt);
+
+            return new AccessToken
+            {
+                Token = token,
+                Expiration = _accesTokenExpiration
+            };
 
         }
 
@@ -39,16 +49,22 @@ namespace Core.Utilities.Security.Jwt
                 audience:tokenOptions.Audience,
                 expires:_accesTokenExpiration,
                 notBefore:DateTime.Now,
-                claims:operationClaims,
+                claims:SetClaims(user,operationClaims),
                 signingCredentials:signingCredentials
                 
                 );
+
+            return jwt;
         }
 
         private IEnumerable<Claim> SetClaims(User user,List<OperationClaim> operationClaims)
         {
             var claims=new List<Claim>();
-            claims.Add(new Claim(type: "email", value: user.Email));
+            claims.AddNameIdentifier(user.Id.ToString());
+            claims.AddEmail(user.Email);
+            claims.AddName($"{user.FirstName} {user.LastName}");
+            claims.Addroles(operationClaims.Select(c=>c.Name).ToArray());
+            return claims;
         }
     }
 }
